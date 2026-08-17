@@ -62,6 +62,13 @@ Impecable: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-coll
 ### ⚠️ Esta configuración YA SE PERDIÓ UNA VEZ (relevado 2026-08-17)
 En una sesión previa (13-14/08) se dejó el mail andando en 465/tls=yes, los scripts `hsi-alert-*` mandando mail, y el netwatch del HSI con esos scripts asignados. Al relevar el 17/08 **las tres cosas habían vuelto atrás juntas**: mail en 587/tls=no sin credenciales, scripts con solo `:log`, netwatch sin scripts asignados. Causa más probable: Safe Mode sin confirmar (`Ctrl+X` final), que revierte todo el bloque. **Antes de dar por hecho que algo está configurado, verificalo contra el router — no confíes en documentación de traspaso.** Y recordale siempre al usuario el `Ctrl+X` de confirmación.
 
+### Monitoreo de APs por mail — ANDANDO (verificado 2026-08-17)
+Cadena completa funcionando de punta a punta: 43 entradas de `/tool netwatch` (40 APs con prefijo de comentario `MoniGuti:`, más ONU Movistar, `9.9.9.9` y el HSI) → script `MoniGuti-resumen-APs` → `/system scheduler MoniGuti-check-APs` cada 5 min → mail. El script recorre `[/tool netwatch find where comment~"MoniGuti" status=down]`, arma la lista y solo envía **si cambió respecto de la corrida anterior** (guardada en `:global mgAnterior`), así que no repite mail mientras el estado se mantenga. **No lo rediseñes; si hace falta extenderlo, respetá ese patrón.** Como lee el `status` del netwatch y no el log, funciona aunque los scripts inline no logueen.
+
+### Dos silencios de RouterOS que ya costaron horas
+1. **`not enough permissions`**: un script *con nombre* llamado desde netwatch falla si el invocador no tiene todas las políticas que el script declara. Solución: `dont-require-permissions=yes` (o achicar `policy` a `read,write,test`). Los scripts inline no sufren esto. Fue la causa real de que los `hsi-alert-*` tuvieran `run-count=0` durante semanas.
+2. **`set [find name="X"]` con `X` inexistente no da error**: aplica el cambio a un conjunto vacío y sigue de largo. Lo mismo con un scheduler que apunta a un script que no existe — falla en silencio en cada corrida. **Verificá siempre con un `print` que el objeto exista antes de darlo por configurado.**
+
 ### Comillas anidadas rompen el parser
 `\"...\"` dentro de `"..."` rompe comandos largos pegados en la terminal de WinBox. **No generes `down-script`/`up-script` inline con mensajes entrecomillados** en un `netwatch add`. En su lugar: netwatch sin scripts (solo vigilancia) + un único `/system script` con nombre, creado desde la GUI (System → Scripts), que arme `subject` y `body` en variables locales antes del `/tool e-mail send`. Eso además evita la tormenta de 40 mails cuando cae un switch: un solo mail de resumen por cambio de estado.
 
