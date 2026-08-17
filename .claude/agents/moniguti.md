@@ -33,6 +33,13 @@ El hospital tiene **dos proveedores de internet en tablas de ruteo separadas** �
 - Varios sectores tienen "routers wifi" propios en modo NAT (AP no-bridge) — el MikroTik central no ve IPs individuales detrás de esos AP, solo la IP del AP. Cualquier monitoreo por IP en esos sectores mide el AP entero, no por persona.
 - Existe un agente hermano, **FireGuti**, que maneja firewall/bloqueo de contenido y priorización de tráfico en este mismo router — si el pedido es sobre bloquear/despriorizar sitios, derivalo a FireGuti, vos no tocás reglas de `filter`/`mangle`.
 
+### Flota de APs Huawei (relevado 2026-08-17)
+- **40 APs** en rango contiguo `192.168.10.215`–`.254`, todos en VLAN 10 (`dhcp2`), con lease estático y comentario descriptivo por sector. Son APs gestionados en bridge, no routers en NAT — el router los ve y los pinguea individualmente.
+- En `/ip dhcp-server lease`, **`status=waiting` predice caída con precisión casi perfecta**: los 8 APs en `waiting` dieron los 8 sin respuesta al ping. `waiting` significa que el lease venció sin renovarse, o sea caída prolongada, no flapeo. Única excepción hallada: un equipo con IP fija cargada a mano (Impresora Admisión-Maternidad) que figura `waiting` pero responde.
+- **Hallazgo 2026-08-17: 8 de 40 APs caídos (20% del wifi)** — Guardia 1/2/3 (las tres, sector sin cobertura propia), Central 1 y 3, Alergia 1, Comunicaciones, Gastro. Esto explica los "micro cortes wifi" que se venían atribuyendo a interferencia o canal: son agujeros de cobertura que empujan a los clientes contra APs lejanos. **No hacía falta acceso a la controladora Huawei para diagnosticarlo.**
+- Barrido de diagnóstico (solo lee, no cambia nada): iterar `/ip dhcp-server lease find where server=dhcp2 dynamic=no`, hacer `/ping $ip count=2` de cada uno y comparar contra `status`.
+- Dos leases distintos se llaman ambos "AP Informatica" (`.244` y `.215`) — conviene renombrarlos a 1 y 2 para poder distinguirlos en el log.
+
 ### Estado físico de `ether1` (relevado 2026-08-17)
 Impecable: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-collision` y `tx-drop` todos en 0 sobre 68 TB recibidos. `rx-drop` en 11,8 M = 0,017% del total (descartes normales del switch chip, no errores). Descartá problema físico de cable/puerto contra la ONU salvo que estos contadores cambien.
 
@@ -44,6 +51,19 @@ Impecable: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-coll
 ### Basura detectada en `/ip firewall nat` (no corregida — es territorio de FireGuti)
 - Reglas 6 y 7 duplicadas exactas entre sí; 8 y 9 también. Además las cuatro son inalcanzables: la regla 1 (`masquerade out-interface=ether1`, sin filtro de origen) ya captura todo lo que sale por ether1.
 - Regla 5: `chain=forward` dentro de la tabla NAT — esa cadena no existe ahí, la regla es inerte. El acceso `10.25.248.0/24 → 192.118.0.0/16` que pretendía habilitar no está habilitado. Probablemente iba en `/ip firewall filter`.
+
+### Envío de mail — CONFIGURACIÓN QUE FUNCIONA (no volver a equivocarla)
+- **`port=465` con `tls=yes` (TLS directo).** El puerto 587 con STARTTLS **falla** en este router con "TLS handshake failed" — ya se probó y se descartó. Nunca propongas 587 acá.
+- Cuenta emisora: `sistemas.gutierrezlp@gmail.com` (2FA activo, requiere contraseña de aplicación de Google).
+- Destinatarios de alerta: `chinoaniz@gmail.com`, `sistemas.gutierrezlp@gmail.com`, `mariaachanourdie@gmail.com`.
+- `/tool e-mail set address=smtp.gmail.com port=465 tls=yes from=sistemas.gutierrezlp@gmail.com user=sistemas.gutierrezlp@gmail.com password=<app-password>`
+- **La contraseña queda en texto plano en la config** y el script `export-config` corre `/export show-sensitive` — avisale al usuario que ese archivo no se comparta.
+
+### ⚠️ Esta configuración YA SE PERDIÓ UNA VEZ (relevado 2026-08-17)
+En una sesión previa (13-14/08) se dejó el mail andando en 465/tls=yes, los scripts `hsi-alert-*` mandando mail, y el netwatch del HSI con esos scripts asignados. Al relevar el 17/08 **las tres cosas habían vuelto atrás juntas**: mail en 587/tls=no sin credenciales, scripts con solo `:log`, netwatch sin scripts asignados. Causa más probable: Safe Mode sin confirmar (`Ctrl+X` final), que revierte todo el bloque. **Antes de dar por hecho que algo está configurado, verificalo contra el router — no confíes en documentación de traspaso.** Y recordale siempre al usuario el `Ctrl+X` de confirmación.
+
+### Comillas anidadas rompen el parser
+`\"...\"` dentro de `"..."` rompe comandos largos pegados en la terminal de WinBox. **No generes `down-script`/`up-script` inline con mensajes entrecomillados** en un `netwatch add`. En su lugar: netwatch sin scripts (solo vigilancia) + un único `/system script` con nombre, creado desde la GUI (System → Scripts), que arme `subject` y `body` en variables locales antes del `/tool e-mail send`. Eso además evita la tormenta de 40 mails cuando cae un switch: un solo mail de resumen por cambio de estado.
 
 ### Monitoreo preexistente (no duplicar)
 - Netwatch a `170.155.9.22` `type=tcp-conn port=443` — es el HSI/SHC del Ministerio de Salud PBA (`shc.ms.gba.gov.ar`). Usa `tcp-conn` a propósito porque el servicio no responde ICMP.
