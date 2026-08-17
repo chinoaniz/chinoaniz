@@ -20,7 +20,10 @@ El hospital tiene **dos proveedores de internet en tablas de ruteo separadas** �
 | Tabla de ruteo | `main` | `xDPT` |
 
 - **La ONU Movistar NO está en bridge**: está en modo router/NAT, el MikroTik queda detrás de su NAT y no ve la IP pública. Consecuencia crítica para monitoreo: **si se corta la fibra, la ONU sigue encendida y responde ping**, la ruta default de `main` sigue ACTIVE, y todo el internet general cae con el router reportando la ruta sana. Por eso `check-gateway=ping` NO sirve acá (pinguea a la ONU, que está viva) — hay que sondear un destino remoto forzado por cada salida.
-- No hay failover automático entre ambos enlaces: si Movistar cae, el provincial NO toma el relevo (vive en otra tabla).
+**El enlace provincial DPT está FUERA DE SCOPE de monitoreo** (decisión del usuario, 2026-08-17): son ~10 máquinas sobre 40 Mb, no justifica monitorearlo. No propongas sondas ni alertas para él.
+
+- El DPT **no es un segundo proveedor de internet**: la única `/routing rule` que alimenta la tabla `xDPT` es `src-address=10.101.45.64/26 dst-address=10.0.0.0/8 action=lookup-only-in-table`. O sea, solo la LAN delegada y solo hacia 10/8. Todo lo demás sale por Movistar. No sirve como respaldo de Movistar sin rediseñar el ruteo.
+- **Movistar es punto único de falla para todo el internet del hospital**, incluido el HSI (`170.155.9.22` es IP pública, se accede por Movistar) y todo el DNS.
 - LAN delegada desde la DPT en `ether2-vlan140` (`10.101.45.126/26`).
 - Trunk interno: `ether2` → switch Huawei, lleva 17 VLANs.
 - 17 VLANs departamentales sobre `ether2-vlan10` a `ether2-vlan170`, cada una `192.168.X0.0/24` (Invitados es `/23`), ya identificadas por nombre/comentario en `/ip address print`.
@@ -32,6 +35,15 @@ El hospital tiene **dos proveedores de internet en tablas de ruteo separadas** �
 
 ### Estado físico de `ether1` (relevado 2026-08-17)
 Impecable: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-collision` y `tx-drop` todos en 0 sobre 68 TB recibidos. `rx-drop` en 11,8 M = 0,017% del total (descartes normales del switch chip, no errores). Descartá problema físico de cable/puerto contra la ONU salvo que estos contadores cambien.
+
+### DNS (relevado 2026-08-17)
+- El MikroTik es el resolver de los clientes (`allow-remote-requests=yes`), con upstream `8.8.8.8` y `1.1.1.1` más los dinámicos de Movistar (`186.130.128.250`, `186.130.129.250`). **Los cuatro se alcanzan solo por Movistar**: si Movistar cae, muere la resolución de nombres de todo el hospital.
+- `8.8.8.8` y `1.1.1.1` están EN USO como upstream → **no las uses como IP de sonda**. `9.9.9.9` está libre y es la sonda elegida para Movistar.
+- El caché estaba saturado (`cache-used` = `cache-size` = 2048KiB) con 800+ usuarios, lo que se siente como "internet lento" aunque el enlace esté sano. Se subió a `16384KiB`.
+
+### Basura detectada en `/ip firewall nat` (no corregida — es territorio de FireGuti)
+- Reglas 6 y 7 duplicadas exactas entre sí; 8 y 9 también. Además las cuatro son inalcanzables: la regla 1 (`masquerade out-interface=ether1`, sin filtro de origen) ya captura todo lo que sale por ether1.
+- Regla 5: `chain=forward` dentro de la tabla NAT — esa cadena no existe ahí, la regla es inerte. El acceso `10.25.248.0/24 → 192.118.0.0/16` que pretendía habilitar no está habilitado. Probablemente iba en `/ip firewall filter`.
 
 ### Monitoreo preexistente (no duplicar)
 - Netwatch a `170.155.9.22` `type=tcp-conn port=443` — es el HSI/SHC del Ministerio de Salud PBA (`shc.ms.gba.gov.ar`). Usa `tcp-conn` a propósito porque el servicio no responde ICMP.
