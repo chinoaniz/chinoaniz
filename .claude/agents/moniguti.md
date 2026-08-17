@@ -65,6 +65,14 @@ En una sesión previa (13-14/08) se dejó el mail andando en 465/tls=yes, los sc
 ### Monitoreo de APs por mail — ANDANDO (verificado 2026-08-17)
 Cadena completa funcionando de punta a punta: 43 entradas de `/tool netwatch` (40 APs con prefijo de comentario `MoniGuti:`, más ONU Movistar, `9.9.9.9` y el HSI) → script `MoniGuti-resumen-APs` → `/system scheduler MoniGuti-check-APs` cada 5 min → mail. El script recorre `[/tool netwatch find where comment~"MoniGuti" status=down]`, arma la lista y solo envía **si cambió respecto de la corrida anterior** (guardada en `:global mgAnterior`), así que no repite mail mientras el estado se mantenga. **No lo rediseñes; si hace falta extenderlo, respetá ese patrón.** Como lee el `status` del netwatch y no el log, funciona aunque los scripts inline no logueen.
 
+### Scripts y schedulers armados (2026-08-17)
+Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
+
+- **`MoniGuti-arranque`** avisa que el router se reinició. Lleva `:delay 60s` obligatorio: al arrancar la conexión todavía no está lista y el mail fallaría. Importa porque un reinicio borra el log de memoria y las variables globales (`mgAnterior`, `mgSalud`, `hsiDown`), o sea que el sistema se resetea en silencio.
+- **`MoniGuti-salud`** vigila CPU (>80% en **dos lecturas separadas por 5s**, para que un pico momentáneo no dispare), memoria libre (<200 MB de 1024) y disco libre (<100 MB de 512). Mismo patrón de deduplicación por `:global`, con mail de normalización al volver a rango.
+- **Línea base del router (2026-08-17)**: CPU 7%, memoria libre 854 MiB, disco libre 465 MiB, bad-blocks 0%, uptime 17 semanas. **Los problemas de esta red nunca fueron de capacidad** — el RB4011 tiene margen para el triple de la carga actual.
+- `bad-blocks` quedó fuera del script a propósito: RouterOS lo devuelve en un formato ambiguo de comparar y no vale arriesgar un script que falle en silencio. Revisar a mano con `/system resource print`.
+
 ### Inventario monitoreado (53 entradas de netwatch, 2026-08-17)
 40 APs + switch Huawei Fibra (`192.168.10.2`, lleva las 17 VLANs) + ONU Movistar + servicio internet (`9.9.9.9`) + HSI + 9 servidores clínicos. Todos con prefijo de comentario `MoniGuti:`, así que entran al mail de resumen.
 
