@@ -65,6 +65,19 @@ En una sesión previa (13-14/08) se dejó el mail andando en 465/tls=yes, los sc
 ### Monitoreo de APs por mail — ANDANDO (verificado 2026-08-17)
 Cadena completa funcionando de punta a punta: 43 entradas de `/tool netwatch` (40 APs con prefijo de comentario `MoniGuti:`, más ONU Movistar, `9.9.9.9` y el HSI) → script `MoniGuti-resumen-APs` → `/system scheduler MoniGuti-check-APs` cada 5 min → mail. El script recorre `[/tool netwatch find where comment~"MoniGuti" status=down]`, arma la lista y solo envía **si cambió respecto de la corrida anterior** (guardada en `:global mgAnterior`), así que no repite mail mientras el estado se mantenga. **No lo rediseñes; si hace falta extenderlo, respetá ese patrón.** Como lee el `status` del netwatch y no el log, funciona aunque los scripts inline no logueen.
 
+### Inventario monitoreado (53 entradas de netwatch, 2026-08-17)
+40 APs + switch Huawei Fibra (`192.168.10.2`, lleva las 17 VLANs) + ONU Movistar + servicio internet (`9.9.9.9`) + HSI + 9 servidores clínicos. Todos con prefijo de comentario `MoniGuti:`, así que entran al mail de resumen.
+
+Servidores tomados de la address-list `Servidores Generales`: NAS Placas `10.25.248.245`, NAS 2 Placas `10.25.248.247`, NAS Backup `10.25.248.251`, Triage `10.25.248.9`, SISC `10.101.33.85`, Orquestador `10.25.248.11`, Servidor Virtual Ministerio `10.25.248.8`, Página del Hospital `10.25.248.248`, Puerta de Enlace Ministerio `10.25.248.254`.
+
+**Excluidas a propósito** (no responden ICMP y su principal sí — monitorearlas daría avisos falsos): `10.25.248.10` (2da IP SISC), `10.101.33.87` (2da IP Triage), `10.25.248.249` (W12_PACS2, secundario del PACS).
+
+**Regla de qué monitorear**: solo lo que debería estar encendido siempre — APs, switches, servidores. Nunca impresoras ni PCs de usuario: se apagan de noche y los fines de semana, y el ruido termina matando la utilidad del sistema.
+
+**Siempre sondeá con ping antes de crear netwatch.** Muchos servidores filtran ICMP por política y armarlos a ciegas genera caídos falsos permanentes. Para los que filtran pero están vivos, usar `type=tcp-conn` contra su puerto real, como el HSI.
+
+**Un mail listando ~41 equipos caídos no son 41 problemas**: es el switch Huawei Fibra, que arrastra las 17 VLANs y los 40 APs. El número es el diagnóstico.
+
 ### El mail nunca puede avisar de una caída del WAN
 El aviso viaja por la conexión que se cayó: si Movistar muere, el router no alcanza `smtp.gmail.com` y el envío falla. Y como el script de resumen actualiza `mgAnterior` **antes** de intentar el envío, ese estado queda dado por avisado y el mail se pierde; el siguiente que sale es el de recuperación, mostrando todo normal. El enlace provincial tampoco sirve de salida alternativa porque no rutea a internet general. **Por eso las sondas del WAN (`192.168.1.1` y `9.9.9.9`) llevan `down-script`/`up-script` con `:log`, que funciona sin internet.** Se consultan con `/log print where message~"MoniGuti-DOWN"`. Para alerta real de caída de WAN hace falta un servicio externo que pinguee el hospital desde afuera — no se puede resolver desde el router.
 
