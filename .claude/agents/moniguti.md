@@ -65,6 +65,24 @@ En una sesión previa (13-14/08) se dejó el mail andando en 465/tls=yes, los sc
 ### Monitoreo de APs por mail — ANDANDO (verificado 2026-08-17)
 Cadena completa funcionando de punta a punta: 43 entradas de `/tool netwatch` (40 APs con prefijo de comentario `MoniGuti:`, más ONU Movistar, `9.9.9.9` y el HSI) → script `MoniGuti-resumen-APs` → `/system scheduler MoniGuti-check-APs` cada 5 min → mail. El script recorre `[/tool netwatch find where comment~"MoniGuti" status=down]`, arma la lista y solo envía **si cambió respecto de la corrida anterior** (guardada en `:global mgAnterior`), así que no repite mail mientras el estado se mantenga. **No lo rediseñes; si hace falta extenderlo, respetá ese patrón.** Como lee el `status` del netwatch y no el log, funciona aunque los scripts inline no logueen.
 
+### ⚠️ Arquitectura de Simple Queues — EL ORDEN ES CRÍTICO (2026-08-18)
+Las Simple Queues son **"primera que matchea, gana"** por posición. Hay 46 queues en cuatro bloques y **el orden es lo que las hace funcionar**:
+
+| Posición | Bloque | Efecto |
+|---|---|---|
+| 0-16 | `!VLANxx-*-interno` (`dst=10.0.0.0/8`, `max-limit=0/0`) | tráfico a NAS/PACS/SISC/Triage **sin techo** |
+| 17-27 | `Guardia *` (11 PCs, `max-limit=400M/400M`) | medición por PC |
+| 28-44 | `!VLANxx-*` (17, `max-limit=400M/400M`) | internet limitado por VLAN |
+| 45 | `Interfaz-WAN-Total` | resto sin clasificar |
+
+- **Si movés una `-interno` abajo de su `!VLANxx`, deja de servir**: el tráfico interno cae en la de 400M y queda limitado igual.
+- **Invitados** tiene además `pcq-Invitados-upload-40M/pcq-Invitados-download-40M` (40 Mbps por dispositivo). Los tipos de 25M/100M/200M quedaron sin uso.
+- **El parámetro es `dst=`, NO `dst-address=`** — este último es de RouterOS 6 y en la 7 da `expected end of command`.
+- **Para reordenar varias queues usá UN solo `move` con `[find ...]`**, nunca un `:foreach` con `move` adentro: el bucle no reordena bien (las deja al final o en orden invertido). `/queue simple move [find name~"interno"] destination=0` funciona; el `:foreach` equivalente no.
+- **El filtro `name~"VLAN"` ya NO es seguro** para operaciones por lote: también agarra las `-interno` y les pisa el `max-limit=0/0`. Excluilas siempre:
+  `:if ([:typeof [:find $n "interno"]] != "num") do={ ... }`
+- **Hallazgo 2026-08-18**: 8 de las 11 queues de Guardia (las que apuntan a `192.168.160.x`) llevaban desde su creación **sin medir nada**, porque estaban debajo de `!VLAN160-Seguridad`, que capturaba toda la subred antes. Las 3 que sí medían apuntan a `10.25.248.x`, fuera del alcance de cualquier queue de VLAN. Se corrigió subiéndolas a la posición 17.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
