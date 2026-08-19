@@ -72,11 +72,13 @@ Las Simple Queues son **"primera que matchea, gana"** por posición. Hay 46 queu
 |---|---|---|
 | 0-16 | `!VLANxx-*-interno` (`dst=10.0.0.0/8`, `max-limit=0/0`) | tráfico a NAS/PACS/SISC/Triage **sin techo** |
 | 17-27 | `Guardia *` (11 PCs, `max-limit=400M/400M`) | medición por PC |
-| 28-44 | `!VLANxx-*` (17, `max-limit=400M/400M`) | internet limitado por VLAN |
+| 28-44 | `!VLANxx-*` (17, `max-limit=600M/600M`) | internet limitado por VLAN |
 | 45 | `Interfaz-WAN-Total` | resto sin clasificar |
 
-- **Si movés una `-interno` abajo de su `!VLANxx`, deja de servir**: el tráfico interno cae en la de 400M y queda limitado igual.
-- **Invitados** tiene además `pcq-Invitados-upload-40M/pcq-Invitados-download-40M` (40 Mbps por dispositivo). Los tipos de 25M/100M/200M quedaron sin uso.
+- **Si movés una `-interno` abajo de su `!VLANxx`, deja de servir**: el tráfico interno cae en la queue con techo y queda limitado igual.
+- **Invitados** tiene además `pcq-Invitados-upload-200M/pcq-Invitados-download-200M` (200 Mbps por dispositivo). Existen tipos de 25M/40M/100M/150M sin uso, de la calibración.
+- **Calibración del 2026-08-18**: se arrancó en 400M por VLAN y 40M por dispositivo. Con 40M, Invitados acumuló **9,4 millones de paquetes descartados en pocas horas — cerca del 9% de pérdida**, que se siente como videos cortados y páginas lentas. Se subió por pasos (40 → 100 → 150 → 200M por dispositivo, 400 → 500 → 600M por VLAN) hasta el punto actual. **Los descartes venían del tope por dispositivo, no del cap por VLAN**: las VLANs clínicas nunca pasaron de ~200 mil descartes contra los millones de Invitados. Si hay que volver a tocar esto, ese es el orden de magnitud a mirar, y `reset-counters` antes de cada medición.
+- **Los rangos `10.25.248.x`, `10.101.x` y `172.16.x` no tienen queue**, así que todo lo que cuelga de la red DPT está fuera de los topes. Solo las tres PCs de Guardia con IP `10.25.248.x` tienen queue propia.
 - **El parámetro es `dst=`, NO `dst-address=`** — este último es de RouterOS 6 y en la 7 da `expected end of command`.
 - **Para reordenar varias queues usá UN solo `move` con `[find ...]`**, nunca un `:foreach` con `move` adentro: el bucle no reordena bien (las deja al final o en orden invertido). `/queue simple move [find name~"interno"] destination=0` funciona; el `:foreach` equivalente no.
 - **El filtro `name~"VLAN"` ya NO es seguro** para operaciones por lote: también agarra las `-interno` y les pisa el `max-limit=0/0`. Excluilas siempre:
