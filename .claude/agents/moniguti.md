@@ -85,6 +85,16 @@ Las Simple Queues son **"primera que matchea, gana"** por posición. Hay 46 queu
   `:if ([:typeof [:find $n "interno"]] != "num") do={ ... }`
 - **Hallazgo 2026-08-18**: 8 de las 11 queues de Guardia (las que apuntan a `192.168.160.x`) llevaban desde su creación **sin medir nada**, porque estaban debajo de `!VLAN160-Seguridad`, que capturaba toda la subred antes. Las 3 que sí medían apuntan a `10.25.248.x`, fuera del alcance de cualquier queue de VLAN. Se corrigió subiéndolas a la posición 17.
 
+### Calidad del enlace — latencia, jitter y pérdida (2026-08-20)
+Netwatch `type=icmp` sobre `1.1.1.1` con comentario **`Calidad: enlace Movistar`** — sin la palabra "MoniGuti" **a propósito**, para que un pico de latencia no aparezca en el mail de equipos caídos. Se eligió `1.1.1.1` porque sale por Movistar; `8.8.8.8` tiene una ruta `/32` que lo manda por el enlace provincial y mediría el camino equivocado.
+
+- **Las estadísticas NO salen en `print detail`, salen en `/tool netwatch print stats`**: `rtt-min`, `rtt-avg`, `rtt-max`, `rtt-jitter`, `rtt-stdev`, `loss-percent`, `sent-count`, `response-count`. Se leen con `/tool netwatch get $id rtt-avg`.
+- Alternativa portable si esos campos faltaran: `[/ping <host> count=N as-value]` devuelve un array con `time` por paquete.
+- El script `MoniGuti-calidad` (scheduler `MoniGuti-check-calidad`, cada 5 min) escribe una línea `CALIDAD avg=... max=... jitter=... loss=...` en el log y avisa por mail si el promedio supera **150ms**, con el mismo patrón de deduplicación por `:global`. Se consulta con `/log print where message~"CALIDAD"`.
+- Se subió `memory-lines` del log a **5000** para que el histórico no rote en un día.
+- **Línea base (2026-08-20)**: el enlace anda en **28-35 ms con jitter de 4-30 ms y 0% de pérdida**, con picos transitorios de hasta 135 ms y jitter de 110 ms. **El jitter es el indicador más sensible** — sube antes que el promedio.
+- **No fijes el umbral con pocas muestras.** El valor de 150ms es provisorio; hay que recalcularlo con un día completo de datos y cruzarlo contra el gráfico de `ether1`: si los picos coinciden con tráfico alto es saturación propia, si aparecen con el enlace vacío es de Movistar.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
