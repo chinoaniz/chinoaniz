@@ -169,6 +169,36 @@ Cierre del relevamiento 17-24/08. Ante Movistar esto se sostiene punto por punto
 
 **Lo único que queda del lado de Movistar**: ONU residencial en NAT y contención GPON en horario laboral. La degradación diaria 08:00-11:00 no tiene ninguna causa dentro del hospital.
 
+### La ONU Movistar identificada (2026-08-24)
+Etiqueta del equipo (el "router" de Movistar, el que está en `192.168.1.1`):
+
+- **Fabricante: MitraStar Technology.** El serial GPON arranca con `4D535443`, que en ASCII es `MSTC` — los primeros cuatro bytes del serial GPON son el identificador de fabricante. Es el proveedor habitual de HGU de Movistar.
+- Es una **HGU residencial dual-band con app Smart WiFi**. Equipo doméstico, no un ONT corporativo. Coherente con el producto "Acceso Línea Hogar".
+- Administración web en `http://192.168.1.1`. **Las credenciales están impresas en la etiqueta del equipo — nunca las escribas en este repo ni en ningún informe.**
+
+### 🚨 Hallazgo: la ONU emite WiFi propio dentro del hospital (2026-08-24)
+La etiqueta muestra dos SSID activos (`MovistarFibra-B24058` en 2,4 GHz y su par en 5 GHz), con la clave impresa a la vista en un rack accesible.
+
+**Esa red está del lado WAN del MikroTik.** Quien se conecte:
+- no pasa por las Simple Queues (sin tope por VLAN ni por dispositivo)
+- no pasa por el firewall ni por ninguna regla de FireGuti
+- no pasa por el DNS del hospital (sin filtrado ni caché)
+- **no aparece en ningún netwatch, queue ni gráfico** — es tráfico invisible para todo el monitoreo
+
+**Acción recomendada**: deshabilitar ambas radios desde `192.168.1.1`. Es gratis, reversible, no afecta a nadie del hospital, y de paso le quita carga de CPU a la ONU.
+
+### Datos a extraer de la ONU (pendiente)
+Entrando a `192.168.1.1`:
+1. **Modelo exacto** (Estado / Información del dispositivo).
+2. **Potencia óptica Rx y Tx en dBm** (Estado → GPON). Rx normal: −18 a −25 dBm; por debajo de −27 hay problema óptico.
+3. **Sesiones NAT activas** (Estado → Conexiones, o Diagnóstico). **Es la prueba directa de la hipótesis del doble NAT**: si está clavado en unos pocos miles mientras el MikroTik empuja 17.393, el caso queda cerrado.
+4. **Si existe modo bridge** (Configuración → WAN).
+
+**Vocabulario para la llamada**: Movistar llama al modo bridge **"monopuesto"** (también "modo puente"). Si se pide como "bridge" el soporte puede responder que no existe. En muchas HGU la opción está **oculta en la interfaz del cliente** y solo se habilita desde el aprovisionamiento remoto — o sea que hay que pedírselo a Movistar igual.
+
+### Informe de reclamo a Movistar (2026-08-24)
+Publicado como artifact: plan de llamada con la ficha del caso, los tres números que sostienen el reclamo, la tabla de evidencia, el pedido en orden de prioridad (bridge primero), el guion de apertura, la tabla de seis objeciones con su respuesta, qué pedirle al técnico, qué no aceptar y el escalamiento a ENACOM. **Dos puntos críticos del guion**: decir "no es un problema de velocidad" en los primeros 30 segundos, y exigir que la medición del técnico se haga **entre las 09:00 y las 11:00** (a las 15:00 el enlace da perfecto y cierran el caso).
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
