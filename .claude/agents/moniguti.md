@@ -117,6 +117,28 @@ Confirmado con la muestra del 24/08 00:12:54: `avg=139.097ms max=139.097ms jitte
 - **Falta el dato que cierra el diagnóstico**: el gráfico de `ether1` de 08:00 a 11:00. Si el enlace está lleno en esa franja es saturación propia (y se arregla con los caps de las queues); si está al 15-20% es de Movistar (y se arregla con un producto corporativo con SLA o con un segundo proveedor).
 - El umbral de 150 ms del script es **demasiado alto**: deja pasar toda la franja mala. Alertar por `jitter > 100ms` o `pérdida > 0` captura los eventos reales mucho antes.
 
+### El producto Movistar es RESIDENCIAL — dato clave (2026-08-24)
+Captura de Mi Movistar: **"Acceso Línea Hogar"**, fibra, **velocidad de descarga 940 Mbps**, en paquete con telefonía fija y promo de línea móvil. **La subida ni siquiera figura publicada** — señal típica de producto best-effort.
+
+Un hospital con 800+ usuarios y sistemas clínicos (HIS, PACS, laboratorio, HSI) está corriendo sobre un plan hogareño: sin SLA, sin garantía de caudal, sin IP fija, con ONU de consumo y compartiendo el árbol GPON del barrio. **Esto explica el patrón horario mejor que cualquier hipótesis técnica del lado del hospital.**
+
+- **La velocidad NO es el problema**: pico medido 209,66 Mb sobre 940 contratados = **22% de uso**. Sumar más Mbps (ej. Telecentro Ultra 4 Gb) no resuelve nada, porque es la misma clase de producto. Si se suma un segundo proveedor, que sea **por redundancia**, no por capacidad.
+- **El pedido correcto a Movistar es cambiar de clase de producto, no de velocidad**: Fibra Empresas con SLA, caudal de subida definido, IP fija y **ONU en bridge**. Un corporativo de 300 Mb simétrico con SLA es mejor que 940 residencial.
+
+### ⚠️ Pinguear la ONU NO la exonera (corrección metodológica, 2026-08-24)
+Durante varias sesiones se usó "la ONU responde en 0,5 ms durante los picos" como prueba de que la ONU no es la causa. **El razonamiento es inválido.** Un ping a la ONU llega a su interfaz LAN y lo contesta el CPU ahí mismo: **nunca atraviesa el NAT ni sale a la fibra**. Mide si la ONU está viva, no si su camino de reenvío está congestionado. Una ONU puede contestar ping en medio milisegundo mientras descarta tráfico que la atraviesa.
+
+### Hipótesis vigente: la tabla de NAT de la ONU (2026-08-24)
+Hay **doble NAT**: 800+ usuarios → MikroTik (masquerade) → una sola IP `192.168.1.49` → ONU (NAT otra vez) → fibra. Desde la ONU hay *un solo cliente* pidiendo decenas de miles de conexiones simultáneas. Una ONU residencial sostiene unos pocos miles de entradas; el RB4011 sostiene cientos de miles.
+
+Explica los cinco síntomas a la vez: jitter alto y pérdida (tabla llena, se demoran/descartan conexiones nuevas), enlace vacío al 22% (no es caudal), ONU con ping perfecto (su CPU está bien), y recurrencia diaria en hora pico.
+
+**Medición que discrimina**: `/ip firewall connection tracking print` durante la franja 09:00-11:00.
+- `total-entries` cerca de `max-entries` → el cuello es el propio MikroTik, se sube con `set max-entries=`.
+- `total-entries` cómodo (15.000-40.000) → el router está bien y ese número es la carga que se le está pidiendo a una ONU de consumo.
+
+**Poner la ONU en bridge resuelve además el agujero de detección de caída de WAN** documentado más arriba: el MikroTik pasaría a tomar la IP pública y la ruta default dejaría de figurar sana con la fibra cortada.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
