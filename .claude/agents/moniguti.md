@@ -139,6 +139,36 @@ Explica los cinco síntomas a la vez: jitter alto y pérdida (tabla llena, se de
 
 **Poner la ONU en bridge resuelve además el agujero de detección de caída de WAN** documentado más arriba: el MikroTik pasaría a tomar la IP pública y la ruta default dejaría de figurar sana con la fibra cortada.
 
+### Conntrack medido: el MikroTik queda exonerado (2026-08-24, ~11:00)
+`/ip firewall connection tracking print` en plena franja degradada:
+
+```
+max-entries: 999424
+total-entries: 17393     <- 1,7% de la capacidad
+```
+
+- **El router no es el cuello de botella.** No toques `max-entries`, sobra por 57 veces.
+- 17.393 conexiones sobre ~800 usuarios = **~22 por usuario**. Es un valor completamente normal (una sola pestaña de navegador abre 10-20). **No hay nada que recortar del lado del hospital**: el uso es corriente, y el equipamiento no lo aguanta.
+- Ese número es la carga que se le está pidiendo a la ONU residencial a través de una sola IP. Una ONU de consumo típicamente sostiene entre 2.000 y 8.000 entradas de NAT. **17.393 está de 2 a 8 veces por encima de ese rango.**
+- Es evidencia circunstancial fuerte, no prueba: no se puede ver adentro de la ONU. Para confirmarlo, entrar a `192.168.1.1` (credenciales en la etiqueta de la ONU), anotar modelo y buscar su página de estado/NAT.
+
+### ✅ Todo lo que está del lado del hospital ya fue medido y está sano
+Cierre del relevamiento 17-24/08. Ante Movistar esto se sostiene punto por punto:
+
+| Elemento | Medición | Estado |
+|---|---|---|
+| Capa física `ether1` | 0 errores de FCS/fragment/code/jabber/colisión sobre 68 TB | sano |
+| Uso de bajada | pico 209,66 Mb sobre 940 contratados = 22% | sin saturar |
+| Uso de subida | pico 33,82 Mb, promedio 7,17 Mb | sin saturar |
+| CPU / memoria / disco del router | 7% / 854 MiB libres / 465 MiB libres | sano |
+| Conntrack del router | 17.393 de 999.424 = 1,7% | sano |
+| DNS | caché ampliado a 16384KiB, estabilizado en ~4,6 MB | corregido |
+| Proxy / NAT redirect roto | deshabilitado, HTTP verificado | corregido |
+| APs caídos | 8 de 40 detectados, 6 reparados | en curso |
+| Latencia de noche | 95 muestras a 29-33 ms, jitter <19 ms, 0% pérdida | sano |
+
+**Lo único que queda del lado de Movistar**: ONU residencial en NAT y contención GPON en horario laboral. La degradación diaria 08:00-11:00 no tiene ninguna causa dentro del hospital.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
