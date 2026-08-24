@@ -95,6 +95,28 @@ Netwatch `type=icmp` sobre `1.1.1.1` con comentario **`Calidad: enlace Movistar`
 - **Línea base (2026-08-20)**: el enlace anda en **28-35 ms con jitter de 4-30 ms y 0% de pérdida**, con picos transitorios de hasta 135 ms y jitter de 110 ms. **El jitter es el indicador más sensible** — sube antes que el promedio.
 - **No fijes el umbral con pocas muestras.** El valor de 150ms es provisorio; hay que recalcularlo con un día completo de datos y cruzarlo contra el gráfico de `ether1`: si los picos coinciden con tráfico alto es saturación propia, si aparecen con el enlace vacío es de Movistar.
 
+### Campo `loss` de netwatch — DECODIFICADO (2026-08-24)
+`loss-percent` **no devuelve un porcentaje directo: devuelve décimas de por ciento** (1% = 10 unidades). Los valores "imposibles" que se venían viendo se leen así: `loss=100` → 10%, `loss=200` → 20%, `loss=300` → 30%, `loss=900` → 90%.
+
+Confirmado con la muestra del 24/08 00:12:54: `avg=139.097ms max=139.097ms jitter=0 loss=900`. Que `avg` sea igual a `max` y el jitter sea exactamente 0 solo puede pasar si **respondió un único paquete**; con `packet-count=10` eso son 9 perdidos = 90% = `loss=900`. Encaja exacto.
+
+**En scripts hay que dividir por 10**: `([:tonum $loss] / 10)`. Y conviene loguear además `sent-count` y `response-count`, que dan el crudo sin ambigüedad.
+
+### Patrón diario del enlace Movistar — CONFIRMADO (2026-08-24, 18 h continuas)
+216 muestras del 23/08 16:42 al 24/08 10:42. **La degradación no es aleatoria: es un horario.**
+
+| Franja | Muestras | Latencia | Jitter máx | Pérdida |
+|---|---|---|---|---|
+| Noche 00:15–08:10 | 95 | 29,4–32,9 ms, plana | 19 ms | 0 en todas |
+| Mañana 08:12–10:42 | 31 | mediana 37 ms, 9 por encima de 50 ms | **251 ms** | 3 eventos (10%, 20%, 30%) |
+
+- Sobre el total: 4,2% de las muestras por encima de 100 ms. **Dentro de la franja 08:12–10:42 ese número sube a 29%.**
+- **El jitter es el indicador, no el promedio**: de noche nunca pasa de 19 ms, a la mañana llega a 251 ms. Sube antes y más marcado que la latencia.
+- Es la **tercera observación de la misma ventana** (20/08 09:00-11:00, 22/08 desde 11:22, 24/08 08:12-10:42). Ya no son incidentes sueltos: es un patrón reproducible en horario laboral, compatible con **contención de GPON en el barrio** (medio compartido, producto residencial).
+- **La ONU vuelve a descartarse como causa**: en el pico peor (24/08 09:17, `avg=371ms loss=30%`) la ONU midió 0,66 ms con 0,87 ms de jitter — impecable. La ONU sube a 6-9 ms en otros momentos de la mañana, pero **sin correlación** con los picos del enlace.
+- **Falta el dato que cierra el diagnóstico**: el gráfico de `ether1` de 08:00 a 11:00. Si el enlace está lleno en esa franja es saturación propia (y se arregla con los caps de las queues); si está al 15-20% es de Movistar (y se arregla con un producto corporativo con SLA o con un segundo proveedor).
+- El umbral de 150 ms del script es **demasiado alto**: deja pasar toda la franja mala. Alertar por `jitter > 100ms` o `pérdida > 0` captura los eventos reales mucho antes.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
