@@ -230,6 +230,34 @@ Pregunta del usuario: si el cuello es la cantidad de conexiones, ¿conviene saca
 
 ⚠️ **Discrepancia a verificar**: el `print stats` muestra `pcq-queues` distinto de cero en **casi todas** las queues, no solo en Invitados — incluidas las `-interno`. La documentación previa decía que solo Invitados tenía tipos PCQ. Pedir `/queue simple print detail` y confirmar qué `queue-type` tiene cada una antes de asumir el diseño.
 
+### Invitados subido a 300M por dispositivo — APLICADO Y VERIFICADO (2026-08-24)
+Decisión del usuario, tomada después de que se le presentara la objeción (los topes no aprietan y sirven de seguro contra un acaparador). Estado final verificado contra el router:
+
+```
+!VLAN20-Invitados
+  queue     = pcq-Invitados-upload-300M / pcq-Invitados-download-300M
+  max-limit = 600M/600M          (ya estaba así, no se tocó)
+```
+
+Se crearon **tipos nuevos** en vez de modificar los de 200M, siguiendo la escalera que ya existía en este router. Los de 200M quedan intactos, así que **el rollback es un solo comando**:
+
+```
+/queue simple set [find name="!VLAN20-Invitados"] queue=pcq-Invitados-upload-200M/pcq-Invitados-download-200M
+```
+
+**Inventario real de tipos PCQ** (corrige la documentación previa, que mencionaba un 150M inexistente): 25M, 40M, 100M, 200M y ahora 300M, en pares upload/download. Todos con `pcq-limit=50KiB`, `pcq-total-limit=2000KiB`, máscaras /32, sin burst. **`upload` usa `pcq-classifier=src-address` y `download` usa `dst-address`** — si quedan cruzados el tope no limita a nadie y RouterOS no emite ningún error.
+
+### ⚠️ `pcq-total-limit` es probablemente el verdadero cuello de las PCQ (2026-08-24)
+```
+pcq-limit       =   50KiB   por dispositivo
+pcq-total-limit = 2000KiB   compartido entre TODOS
+```
+Con **235 dispositivos activos** en Invitados, si cada uno reclamara sus 50 KiB harían falta ~11,7 MB contra 2 MB disponibles. **Manda el total, no el individual.**
+
+Esto reinterpreta el hallazgo de la calibración de agosto: los **9,4 millones de paquetes descartados** con 40M por dispositivo probablemente **no venían del tope de velocidad sino del buffer compartido agotándose**. Si aparecen descartes después de subir a 300M —el tráfico más rápido es más ráfagoso contra el mismo buffer— **el arreglo correcto es subir `pcq-total-limit` a 8000 o 16000 KiB, no bajar `pcq-rate`**. Cambiar una sola cosa por vez para poder medir el efecto.
+
+**Qué mirar en los próximos días**: `dropped=` en `/queue simple print stats where name~"Invitados"`, descartes apareciendo en `!VLAN90-Laboratorio` o `!VLAN170-Central` (señal de que sienten la competencia), y el log `CALIDAD` contra la línea base de la franja 08:00-11:00 (jitter máximo 251 ms, 29% de las muestras sobre 50 ms).
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
