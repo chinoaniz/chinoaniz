@@ -199,6 +199,37 @@ Entrando a `192.168.1.1`:
 ### Informe de reclamo a Movistar (2026-08-24)
 Publicado como artifact: plan de llamada con la ficha del caso, los tres números que sostienen el reclamo, la tabla de evidencia, el pedido en orden de prioridad (bridge primero), el guion de apertura, la tabla de seis objeciones con su respuesta, qué pedirle al técnico, qué no aceptar y el escalamiento a ENACOM. **Dos puntos críticos del guion**: decir "no es un problema de velocidad" en los primeros 30 segundos, y exigir que la medición del técnico se haga **entre las 09:00 y las 11:00** (a las 15:00 el enlace da perfecto y cierran el caso).
 
+### Invitados es el 72% del enlace y el doble de dispositivos que todo el resto junto (2026-08-24)
+Instantánea de `/queue simple print stats` (ventana de segundos, tomada apenas después de `reset-counters-all`):
+
+| | Bajada | Sub-colas PCQ activas (≈ dispositivos con tráfico) |
+|---|---|---|
+| **`!VLAN20-Invitados`** | **138,3 Mbps** | **235** |
+| `!VLAN90-Laboratorio` | 42,4 Mbps | 9 |
+| `!VLAN170-Central` | 4,1 Mbps | 12 |
+| ` Interfaz-WAN-Total` (resto sin clasificar) | 3,8 Mbps | 333 |
+| 13 VLANs clínicas restantes | ~2,4 Mbps sumadas | ~97 sumadas |
+| **Total del hospital** | **~191 Mbps** | |
+
+- **Invitados sola es el 72% de la bajada del hospital.** Las 16 VLANs clínicas juntas son el 26%.
+- **Invitados tiene ~235 dispositivos activos contra ~118 de todas las demás VLANs sumadas**, o sea el doble. Si la hipótesis de la tabla de NAT de la ONU es correcta, **la red de invitados es de lejos el mayor contribuyente a las 17.393 conexiones**.
+- **El lever para bajar conexiones es Invitados, y no pasa por la velocidad.** Un tope de Mbps no reduce conexiones: una PC limitada abre las mismas. Lo que sí las reduce es un **`connection-limit` por IP de origen** en `/ip firewall filter` sobre `192.168.20.0/23` (navegación normal usa 20-60 simultáneas; un tope de ~100 corta los casos patológicos sin que nadie note nada). **Eso es territorio de FireGuti, no de MoniGuti.**
+
+### Confirmación adicional: el MikroTik no encola nada (2026-08-24)
+En las 46 queues, **`queued-bytes=0/0` y `queued-packets=0/0`**, y **`dropped=0/0` en todas**. No hay un solo paquete esperando en ninguna cola del router. **El jitter no nace acá.** Se suma a la lista de exoneraciones del lado del hospital.
+
+⚠️ **La lectura de descartes no es concluyente todavía**: los contadores se habían reseteado segundos antes (Invitados acumuló ~110 MB, que a 138 Mbps son ~6 segundos). **Hay que repetir `/queue simple print stats` con varias horas acumuladas**, idealmente después de las 11:00, antes de concluir que ningún tope aprieta.
+
+### Sobre "liberar" los topes de velocidad (2026-08-24)
+Pregunta del usuario: si el cuello es la cantidad de conexiones, ¿conviene sacar los límites por VLAN y por dispositivo? **No.** Razonamiento:
+- Es cierto que los topes **no reducen conexiones** — en eso la premisa es correcta.
+- Pero **tampoco están apretando a nadie**: el enlace entero pico a 209 Mb y cada VLAN tiene tope de 600 Mb. Es aritméticamente imposible que un cap por VLAN esté limitando. Subirlos no cambiaría absolutamente nada.
+- Y los topes **sí protegen de otra falla**: que un update de Windows en 40 máquinas, un backup mal programado o Invitados acaparen el enlace. Hoy hay aire porque nadie puede acaparar. Sacarlos es entregar el seguro a cambio de cero beneficio, y superpondría un segundo problema (enlace lleno) al que ya tenemos.
+
+**Antes de tocar cualquier tope, medir descartes con `print stats` sobre una ventana larga y subir solo el que aprieta**, nunca todos por lote.
+
+⚠️ **Discrepancia a verificar**: el `print stats` muestra `pcq-queues` distinto de cero en **casi todas** las queues, no solo en Invitados — incluidas las `-interno`. La documentación previa decía que solo Invitados tenía tipos PCQ. Pedir `/queue simple print detail` y confirmar qué `queue-type` tiene cada una antes de asumir el diseño.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
