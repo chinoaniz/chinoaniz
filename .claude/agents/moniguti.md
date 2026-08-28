@@ -258,6 +258,24 @@ Esto reinterpreta el hallazgo de la calibración de agosto: los **9,4 millones d
 
 **Qué mirar en los próximos días**: `dropped=` en `/queue simple print stats where name~"Invitados"`, descartes apareciendo en `!VLAN90-Laboratorio` o `!VLAN170-Central` (señal de que sienten la competencia), y el log `CALIDAD` contra la línea base de la franja 08:00-11:00 (jitter máximo 251 ms, 29% de las muestras sobre 50 ms).
 
+### Cuatro días después del cambio a 300M: sin impacto en el consumo (2026-08-28)
+Gráfico de `ether1` del 28/08 11:53 comparado contra el del 24/08.
+
+| Métrica | 24 ago | 28 ago | Lectura |
+|---|---|---|---|
+| Diario · Max In | 209,66 Mb | 193,18 Mb | igual |
+| Diario · **Avg In** | 54,16 Mb | **77,12 Mb** | ⚠️ engañoso, ver abajo |
+| Diario · Max Out | 33,82 Mb | **62,44 Mb** | subió, pero es buena noticia |
+| **Semanal · Avg In** | **62,98 Mb** | **65,05 Mb** | **+3%: sin cambio real** |
+| Semanal · Max Out | 30,96 Mb | 26,31 Mb | igual |
+
+- **⚠️ Trampa de comparación a evitar en el futuro**: el gráfico "diario" de RouterOS cubre ~30 h, así que el del 24/08 (lunes) incluía **el domingo entero**, que arrastra el promedio muy abajo — en el semanal se ve que sábado y domingo son una fracción de un día hábil. El del 28/08 (viernes) cubre dos días hábiles. **El salto de 54 a 77 Mb es un artefacto de fin de semana, no un aumento de consumo.** Para comparar períodos usar siempre el **promedio del gráfico semanal**, que promedia días hábiles y fin de semana por igual.
+- **Conclusión: subir Invitados a 300M por dispositivo no aumentó el consumo del hospital.** 62,98 → 65,05 Mb de promedio semanal.
+- **`Max Out` de 62,44 Mb entierra definitivamente la hipótesis del techo de subida.** El 33,82 Mb del 24/08 no era un límite físico; el enlace sube al doble sin problema. La convergencia de máximos que se había observado era casualidad.
+- **El uso sigue en ~20%**: pico de 193,18 Mb sobre 940 contratados. La estructura del problema no cambió.
+- El pico de tráfico diario (08:00-12:00) **coincide exactamente con la ventana de degradación**. No es saturación —hay 80% de margen— pero sí más tráfico y por lo tanto más conexiones simultáneas atravesando la ONU, que es justo lo que predice la hipótesis del doble NAT.
+- **Crecimiento sostenido**: el gráfico anual sigue subiendo mes a mes, agosto es el más alto del año.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
