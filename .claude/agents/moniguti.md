@@ -276,6 +276,53 @@ Gráfico de `ether1` del 28/08 11:53 comparado contra el del 24/08.
 - El pico de tráfico diario (08:00-12:00) **coincide exactamente con la ventana de degradación**. No es saturación —hay 80% de margen— pero sí más tráfico y por lo tanto más conexiones simultáneas atravesando la ONU, que es justo lo que predice la hipótesis del doble NAT.
 - **Crecimiento sostenido**: el gráfico anual sigue subiendo mes a mes, agosto es el más alto del año.
 
+### 🎯 PRUEBA DEFINITIVA: no es saturación (2026-08-28)
+El script `MoniGuti-calidad` corregido (con `sent-count`/`response-count` y el tráfico del momento) capturó cinco episodios. **La columna de tráfico es la que cierra el caso:**
+
+| Hora | Latencia | Jitter | Pérdida | Bajada en ese instante |
+|---|---|---|---|---|
+| 08:57 | 287,8 ms | **345,2 ms** | 30% (7/10) | 233 Mb |
+| **09:07** | **257,1 ms** | 162,7 ms | **10% (9/10)** | **84 Mb** ← 9% de 940 |
+| 09:52 | 196,3 ms | 158,0 ms | 0% (10/10) | 98 Mb |
+| 10:02 | 120,0 ms | 176,9 ms | 0% (10/10) | 138 Mb |
+| 10:37 | 239,7 ms | 159,1 ms | **40% (6/10)** | 145 Mb |
+
+- **A las 09:07 hubo 257 ms de latencia y 10% de pérdida con el enlace al 9% de su capacidad.** A las 10:02, con casi el doble de tráfico, la latencia fue menos de la mitad. **La severidad no acompaña al tráfico — hay correlación inversa.** Si fuera saturación sería al revés. Argumento cerrado.
+- La subida durante los cinco episodios fue de 10-18 Mb, contra un máximo probado de 62,44 Mb. **Tampoco es saturación de subida.**
+- La ONU midió 0,6-1,9 ms en los cinco. Impecable en todos.
+- **El decode del campo `loss` queda confirmado directamente**: `perdida=30% 7/10` — 7 de 10 paquetes respondieron. La división por 10 era correcta.
+- 5 muestras degradadas sobre 187 = **2,7%**, todas entre 08:57 y 10:37. **Quinta observación consecutiva de la misma ventana horaria.**
+
+### Fiabilidad comparada de las sondas (2026-08-28)
+`/tool netwatch print stats`, histórico acumulado:
+
+| Sonda | Pruebas | Fallidas | Tasa |
+|---|---|---|---|
+| Internet (`1.1.1.1`, más allá de la ONU) | 11.742 | **448** | **3,8%** |
+| ONU Movistar (`192.168.1.1`) | 11.668 | **4** | **0,03%** |
+
+**El camino del router hasta la ONU es ~100 veces más confiable que el camino más allá.** Dato fuerte y fácil de presentar. Ojo con la interpretación: prueba que el cableado, el switch y el tramo hasta la ONU están sanos — **no exonera al NAT de la ONU**, porque el ping a la ONU lo contesta su CPU sin atravesar el reenvío.
+
+### El cambio a 300M: sin daño medible (2026-08-28, 4 días después)
+`/queue simple print stats`, primeros descartes reales registrados desde el reset del 24/08:
+
+| Queue | Descartes | Paquetes totales | Tasa |
+|---|---|---|---|
+| `!VLAN20-Invitados` | 10.627 | 608.274.557 | **0,0017%** |
+| `!VLAN90-Laboratorio` | 2.724 | 26.362.417 | **0,010%** |
+| `!VLAN170-Central` | 0 | 14.154.809 | 0% |
+| Las 17 `-interno` | 0 | — | 0% |
+
+**Comparación que importa**: en la calibración de agosto con 40M por dispositivo, Invitados acumuló **9,4 millones** de descartes (~9% de pérdida, que los usuarios sentían como videos cortados). Ahora son **10.627**: tres órdenes de magnitud menos. **El buffer de 2 MB aguanta y no hay que tocar `pcq-total-limit`.**
+
+`queued-bytes` y `queued-packets` siguen en cero en todas las queues.
+
+### Estado general al 28/08/2026
+- **Router**: uptime 19w2d, CPU 12%, 847 MiB libres, 465 MiB de disco, bad-blocks 0%. Sano.
+- **Conntrack**: 15.866 de 999.424 = **1,6%**. Sano (era 17.393).
+- **Capa física `ether1`**: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-collision` y `tx-drop` **todos en 0 sobre 76 TB recibidos**. `rx-drop` en 18,9 M = 0,025% (descartes normales del switch chip).
+- **APs caídos: 2** — `192.168.10.244` "AP Informatica" (desde el 20/08 14:01) y `192.168.10.225` "AP Central 1" (desde el 17/08 11:48). **Corrección al inventario previo**: Comunicaciones (`.229`) fue reparada; la que cayó después es AP Informatica.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
