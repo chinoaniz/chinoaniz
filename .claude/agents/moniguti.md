@@ -532,6 +532,68 @@ Es la firma de **encolamiento**, y descarta tres cosas de un saque:
 
 Es la evidencia más legible para alguien no técnico: se ve la columna de treintas y los picos sueltos.
 
+### ✅ SEGUNDA CONFIRMACION del traceroute — el patron es reproducible (2026-08-31, episodio severo)
+```
+#  ADDRESS         LOSS   SENT  AVG    BEST  WORST  STD-DEV
+1  192.168.1.1      4.3%   46     5.0   0.2    55.1    9.6    ← ONU
+2  200.51.241.1     4.3%   46    71.4   2.4   309.1   91.3    ← MOVISTAR
+3  213.140.39.119   8.6%   46    71.8   4.7   284.6   86.3
+4  213.140.39.118   8.0%   46    81.8   3.7   443.7  118.7
+5  94.142.97.59     4.3%   46    86.0  28.0   510.8  181.4
+6  190.98.132.211  54.3%   46    76.1  30.6   289.2   79.5
+7  162.158.225.25   6.4%   46   105.5  30.0   380.8   97.3
+8  1.1.1.1          4.4%   46    98.4  29.4   392.8   85.1
+```
+
+| | Traceroute 1 | Traceroute 2 |
+|---|---|---|
+| Desviación salto 1 (ONU) | 4,3 | 9,6 |
+| Desviación salto 2 (Movistar) | **64,5** | **91,3** |
+| Multiplicador en un salto | **×15** | **×9,5** |
+
+**Dos episodios distintos, el mismo salto.** Ya no es una medición: es un patrón reproducible. Ese es el dato que Movistar no puede discutir.
+
+En este episodio la ONU también se degrada (4,3% de pérdida, 55 ms de peor caso, contra 0% y 17 ms en el primero) — **pero el salto siguiente sigue multiplicando su desviación por diez.** La ONU empeora con el episodio; no lo causa.
+
+### El episodio severo: el piso intacto con la media por las nubes (2026-08-31)
+```
+/ping 1.1.1.1 count=20
+sent=20  received=16  perdida=20%
+min-rtt=31ms996us   avg-rtt=289ms358us   max-rtt=556ms927us
+```
+
+| | Ping normal-degradado | Ping severo |
+|---|---|---|
+| **Mínimo** | 29,2 ms | **32,0 ms** |
+| Promedio | 51,0 ms | **289,4 ms** |
+| Máximo | 166,6 ms | **556,9 ms** |
+| Pérdida | 0% | **20%** |
+
+**El piso se movió 3 milisegundos mientras el promedio se multiplicó por 5,7 y aparecía 20% de pérdida.**
+
+Esta es la frase para la llamada: *el camino sigue midiendo 32 ms — lo que cambió es cuánto tienen que esperar los paquetes para poder entrar.* Un camino roto o más largo subiría el mínimo. Acá el mínimo no se mueve: **es una cola, no un camino.**
+
+### CPU por núcleo: ningún núcleo clavado (2026-08-31)
+```
+cpu0  25%   cpu1  19%   cpu2  19%   cpu3  22%
+IRQ:  24%         17%         14%         20%
+```
+Cierra el último reparo metodológico que quedaba: se había advertido que un `cpu-load` promedio de 17% podía esconder un núcleo al 68%. **No lo esconde — la carga está repartida y ningún núcleo pasa del 25%.** El RB4011 queda descartado sin ninguna salvedad.
+
+### Los equipos caídos identificados (2026-08-31)
+```
+192.168.10.249  AP Neurologia 1   down desde 2026-08-29 12:05:21
+192.168.10.248  AP Neurologia 2   down desde 2026-08-29 12:05:21   ← mismo segundo
+192.168.10.244  AP Informatica    down desde 2026-08-20 14:01:21
+192.168.10.225  AP Central 1      down desde 2026-08-17 11:48:44   ← 14 dias
+192.168.10.220  AP Guardia 2      down desde 2026-08-30 11:32:36
+```
+
+- **Neurología 1 y 2 cayeron en el mismo segundo.** Dos APs no fallan simultáneamente al segundo: **es el switch del sector, su uplink o la alimentación.** Buscar el equipo del que cuelgan, no los APs.
+- **AP Guardia 2** es el más urgente por sector: Guardia ya había tenido sus tres APs caídos en agosto, y era el sector sin cobertura propia.
+- **AP Central 1** lleva **catorce días** caído.
+- Nada de esto tiene que ver con Movistar. **No mezclarlo en el reclamo.**
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
