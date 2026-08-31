@@ -323,6 +323,46 @@ El script `MoniGuti-calidad` corregido (con `sent-count`/`response-count` y el t
 - **Capa física `ether1`**: `rx-fcs-error`, `rx-fragment`, `rx-code-error`, `rx-jabber`, `tx-collision` y `tx-drop` **todos en 0 sobre 76 TB recibidos**. `rx-drop` en 18,9 M = 0,025% (descartes normales del switch chip).
 - **APs caídos: 2** — `192.168.10.244` "AP Informatica" (desde el 20/08 14:01) y `192.168.10.225` "AP Central 1" (desde el 17/08 11:48). **Corrección al inventario previo**: Comunicaciones (`.229`) fue reparada; la que cayó después es AP Informatica.
 
+### 🔴 La ONU se degrada bajo carga — y el router queda exonerado EN EL EVENTO (2026-08-31 ~08:50)
+Primera vez que se captura el enlace degradándose **en vivo**, con todas las variables medidas al mismo tiempo.
+
+| Medición | Valor durante el evento | Base normal |
+|---|---|---|
+| Enlace `1.1.1.1` | avg **74,1 ms** · max 145,4 ms · jitter **115,4 ms** | 29-31 ms · jitter <5 ms |
+| **ONU `192.168.1.1`** | avg **27,6 ms** · jitter 46,6 ms | **0,5 ms** |
+| Tráfico `ether1` | **326,6 Mbps** (récord) · 31.948 pps | — |
+| Conexiones | **17.783** en el print; el usuario reportó picos de **~60.000** | — |
+| **CPU del router** | **17%** | 7-12% |
+| Memoria libre | 847,7 MiB de 1024 | igual |
+
+**Dos conclusiones firmes:**
+
+1. **La ONU está 50 veces más lenta que su valor normal.** En los cinco episodios del 28/08 siempre había respondido entre 0,6 y 1,9 ms. Ahora no. Su CPU no da abasto.
+2. **El MikroTik queda exonerado durante el evento mismo**: 17% de CPU y 847 MiB libres mientras el enlace estaba a 74 ms. Un router solo agrega demora cuando encola, y `queued-packets` estaba en 0 en las 46 queues. **El retraso del ping a la ONU no es artefacto del router: es de la ONU.**
+
+Esto cierra la duda metodológica que quedaba abierta: se había señalado (correctamente) que un ping a la ONU solo prueba que su CPU contesta, no que su reenvío esté sano. **Ahora la prueba de CPU también falla** — o sea que el CPU de la ONU es el recurso agotado.
+
+**Deterioro medible de la ONU en 3 días:**
+
+| Sonda | 28 ago | 31 ago | Cambio |
+|---|---|---|---|
+| ONU — pruebas fallidas | 4 de 11.668 (0,03%) | **48 de 15.801 (0,30%)** | **×10 la tasa** |
+| Internet — pruebas fallidas | 448 de 11.742 (3,8%) | 503 de 15.875 (3,17%) | estable |
+
+**44 fallas nuevas de la ONU en tres días, contra 4 en los ocho anteriores.** La sonda a internet se mantuvo estable en el mismo período: no es un problema general, es la ONU.
+
+⚠️ **Atribución al cambio de 300M (24/08)**: poco probable pero no descartable. El 28/08 —cuatro días después del cambio— la ONU todavía llevaba solo 4 fallas. Las 44 aparecieron en los tres días siguientes. Si hubiera que descartarlo del todo, el rollback a 200M es un comando.
+
+⚠️ **Pendiente para ser 100% concluyente**: `/system resource cpu print` (el `cpu-load` es promedio de 4 núcleos; 17% de promedio admite hasta ~68% en un solo núcleo) y `/ping 192.168.1.1 count=20` junto a `/ping 1.1.1.1 count=20` durante el evento.
+
+### Registro de conexiones — script `MoniGuti-conexiones` (2026-08-31)
+El usuario observó picos de **~60.000 conexiones**, muy por encima de los 15.866-17.783 que capturaron los prints puntuales. Se armó registro continuo:
+- `MoniGuti-calidad` (cada 5 min) ahora loguea también **`conn=`** y **`cpu=`**, de modo que cada línea correlaciona latencia, jitter, pérdida, tráfico, conexiones y CPU.
+- `MoniGuti-conexiones` (cada 1 min) guarda el récord en `:global mgConnMax`/`mgConnHora` y loguea solo por encima de 30.000, para no inundar el log.
+- Desglose por VLAN **a mano, nunca en scheduler**: `[:len [/ip firewall connection find where src-address~"^192.168.20."]]` arma un array enorme con 60k entradas y clava un núcleo.
+
+⚠️ **Caveat obligatorio al citar el número**: `tcp-established-timeout=1d`, así que una parte importante de esas 60.000 son **conexiones muertas que siguen en la tabla**. El número de flujos realmente activos es menor. **No bajar ese timeout**: cortaría sesiones largas e inactivas de RDP, base de datos y PACS. Tener la respuesta lista por si Movistar lo objeta — el pico sigue muy por encima de cualquier tabla residencial incluso descontando las muertas.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
