@@ -443,6 +443,59 @@ Primera muestra con latencia, conexiones y CPU medidas **en el mismo instante du
 - **CPU sube con el tráfico**: 16% a 129 Mb, 23% a 160 Mb, 27% a 158 Mb, **30% a 277 Mb**. Sano, pero ya no es el 7% de la línea base. Vigilar si con más crecimiento se acerca al 60-70%.
 - **HSI: 6 caídas** en el log actual (`/log print count-only where message~"dejo-de-responder"`).
 
+### 🚨 CORTES TOTALES DE INTERNET — primera vez registrados (2026-08-31)
+```
+09:09:48  MoniGuti-DOWN-internet-MOVISTAR
+09:09:52  MoniGuti-UP-internet-MOVISTAR     ← 4 segundos
+09:14:58  MoniGuti-DOWN-internet-MOVISTAR
+09:15:04  MoniGuti-UP-internet-MOVISTAR     ← 6 segundos
+```
+**No es degradación: es pérdida total de conectividad.** Es la sonda a `9.9.9.9`, que quedó sin respuesta por completo. Dos veces en cinco minutos.
+
+Esto lo captó el `down-script`/`up-script` con `:log` de la sonda del WAN — el mecanismo que se armó justamente porque **el mail no puede avisar de una caída del WAN** (el aviso viajaría por la conexión caída). Se consulta con `/log print where message~"MoniGuti-DOWN"`.
+
+### El HSI cae cada 13 minutos (2026-08-31)
+Ocho caídas entre las 08:52 y las 09:40, o sea **108 minutos con una caída cada 13**:
+```
+08:52:12 · 08:54:42 · 08:59:12 · 09:06:12 · 09:10:12 · 09:11:42 · 09:35:12 · 09:40:42
+```
+Las de 09:35 y 09:40 ocurrieron con muestras CALIDAD de solo 35 ms — **la degradación es a ráfagas más cortas que la ventana de 5 minutos del script**. El netwatch, que corre cada minuto, ve lo que el script de calidad se pierde. **No usar solo el log CALIDAD para medir el impacto real.**
+
+### 🎯 La comparación que cierra el argumento del volumen (2026-08-31)
+Dos muestras del mismo día, separadas por 30 minutos:
+
+| Hora | Bajada | Latencia | Jitter |
+|---|---|---|---|
+| 09:02 | **99 Mb** | **125,3 ms** | 160,5 ms |
+| 09:32 | **298 Mb** | **64,4 ms** | 73,3 ms |
+
+**El triple de tráfico con la mitad de la latencia.** Y en el medio, a las 09:07, 238 Mb con 35 ms — prácticamente normal. Es la relación inversa más limpia de todo el relevamiento.
+
+### La latencia de la ONU tampoco correlaciona (2026-08-31)
+Cruzando ONU contra enlace en la misma mañana:
+
+| Hora | ONU | Enlace |
+|---|---|---|
+| 09:12 | **7,1 ms** (elevada) | 38,9 ms (**sano**) |
+| 09:17 | 8,8 ms | 105,5 ms (degradado) |
+| 09:27 | **0,6 ms** (normal) | 51,0 ms (**degradado**) |
+| 09:37 | 5,5 ms | 35,0 ms (sano) |
+
+**La ONU sube con el enlace sano y está impecable con el enlace roto.** Sumado a que sus fallas quedaron congeladas en 48 durante toda la mañana degradada, **la hipótesis de la ONU queda descartada como causa**. Sigue valiendo el pedido de monopuesto por arquitectura y por detección de caídas, pero **no la presentes como la explicación de la degradación**.
+
+### El CPU no lo mueven los bytes (2026-08-31)
+Máximo registrado: **37% a 257 Mb**. Pero: 33% con solo 107 Mb, y 24% con 298 Mb. **No hay relación entre bytes y CPU** — lo que lo mueve es la tasa de paquetes o la rotación de conexiones, no el caudal. Sigue sano y sobrado, pero el pico de 37% es el más alto medido (línea base 7%).
+
+### Estado del diagnóstico al 31/08 09:41 — CERRADO del lado del hospital
+Todo descartado con medición directa durante los episodios:
+1. **Volumen** — 298 Mb a 64 ms contra 99 Mb a 125 ms.
+2. **Conexiones** — sin correlación: 16.819 en el peor episodio, 18.851 con el enlace sano.
+3. **Router** — CPU 12-37%, cero encolamiento, conntrack al 2%.
+4. **Capa física** — cero errores sobre 76 TB.
+5. **ONU** — sin correlación de latencia, sin fallas nuevas durante la degradación.
+
+**Lo que queda: congestión aguas arriba en la red de acceso de Movistar, en horario laboral, con cortes totales.** El reclamo ya no necesita hipótesis: tiene cortes documentados y ocho caídas del sistema de salud provincial.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
