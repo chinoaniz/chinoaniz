@@ -399,6 +399,50 @@ El log de scripts muestra flapeo real, que no tiene nada que ver con Movistar:
 
 **No mezclar esto con el reclamo a Movistar.** Es infraestructura interna del hospital y se arregla acá.
 
+### ⚠️ La hipótesis de la tabla de NAT de la ONU se DEBILITA (2026-08-31 09:15)
+Primera muestra con latencia, conexiones y CPU medidas **en el mismo instante durante un episodio**:
+
+```
+09:02:54  CALIDAD avg=125,3ms jitter=160,5ms perdida=0% baja=99Mb sube=21Mb
+          conn=16819 cpu=12% ONU=0,000625
+```
+
+**Dos conclusiones opuestas salen de esta línea.**
+
+**1. El router queda descartado de forma definitiva.** 125 ms de latencia con **CPU al 12%**, 99 Mb de tráfico (10% del enlace) y la ONU en 0,6 ms. No hay ninguna variable del hospital elevada durante el episodio.
+
+**2. Pero las conexiones tampoco correlacionan.** Cruzando con los récords del mismo cuarto de hora:
+
+| Hora | Conexiones | Estado del enlace |
+|---|---|---|
+| 09:02 | **16.819** | **degradado — 125 ms, jitter 160 ms** |
+| 09:05 | 18.005 | normal |
+| 09:09 | 18.396 | normal |
+| 09:11 | 18.999 | normal |
+| 09:14 | 19.200 | normal |
+| 09:15 | 19.601 | normal |
+
+**Más conexiones con el enlace sano; menos conexiones durante la degradación.** A la resolución que podemos medir, **el conteo de conexiones no predice la degradación**.
+
+**Esto no mata la hipótesis pero la degrada de "principal" a "posible"**: el conteo total está inflado por `tcp-established-timeout=1d` y lo que presiona a la ONU podría ser la *tasa de conexiones nuevas*, no el total acumulado — que no estamos midiendo. Pero **no hay que seguir presentándola como la explicación**. Ser honesto con el usuario antes de que la repita en la llamada a Movistar.
+
+**Estado real del diagnóstico al 31/08:**
+
+| | |
+|---|---|
+| **Certeza** | No es el hospital. Todas las variables internas medidas y sanas. |
+| **Certeza** | No es volumen. Probado varias veces (222 Mb impecable vs 132 Mb catastrófico). |
+| **Certeza** | No es el router. CPU 12-30%, cero encolamiento, conntrack al 2%. |
+| **Probable** | Congestión aguas arriba en la red de acceso de Movistar en horario laboral. |
+| **Posible, sin probar** | La ONU contribuye. A veces sube a 3-7 ms durante los episodios, pero no siempre — a las 09:02 midió 0,6 ms con el enlace a 125 ms. |
+
+**El reclamo a Movistar no se debilita**: se apoya en "no es nuestro, es diario, y voltea el HSI". Eso sigue intacto.
+
+### Datos operativos del 31/08 09:15
+- **Récord de conexiones: 19.200** y subiendo (`mgConnMax`). Sigue **muy lejos de los ~60.000** reportados por el usuario — o el pico ocurre en otro momento, o la observación fue de otra métrica. Dejar correr.
+- **CPU sube con el tráfico**: 16% a 129 Mb, 23% a 160 Mb, 27% a 158 Mb, **30% a 277 Mb**. Sano, pero ya no es el 7% de la línea base. Vigilar si con más crecimiento se acerca al 60-70%.
+- **HSI: 6 caídas** en el log actual (`/log print count-only where message~"dejo-de-responder"`).
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
