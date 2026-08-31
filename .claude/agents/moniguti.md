@@ -594,6 +594,41 @@ Cierra el último reparo metodológico que quedaba: se había advertido que un `
 - **AP Central 1** lleva **catorce días** caído.
 - Nada de esto tiene que ver con Movistar. **No mezclarlo en el reclamo.**
 
+### Los "60.000" eran PAQUETES POR SEGUNDO, no conexiones (2026-08-31 10:23) — resuelto
+```
+10:22:29  PPS RECORD 29095  conn=19957  baja=201Mb  cpu=23%
+10:23:29  PPS RECORD 60565  conn=20020  baja=450Mb  cpu=34%
+```
+El usuario había reportado picos de ~60.000 y se asumió que eran conexiones, lo que alimentó la hipótesis de la tabla de NAT. **Eran paquetes por segundo.** El máximo real de conexiones es **20.578** — el 2,06% de la capacidad del router.
+
+**450 Mb es el pico de tráfico más alto medido.** Ojo con la unidad de medida: `monitor-traffic once` es una foto de un segundo; el graphing promedia a 5 minutos y por eso marca ~200 Mb. **Las dos son ciertas** — promedio de 200, ráfagas de 450.
+
+### ⚠️ Corrección: el CPU SÍ sigue a los bytes (2026-08-31)
+Se había afirmado que "el CPU no lo mueven los bytes sino los paquetes", basándose en muestras como 33% con 107 Mb y 24% con 298 Mb. **Ese razonamiento era inválido**: comparaba un `monitor-traffic once` (instantáneo) contra `cpu-load` (promedio suavizado del último segundo). Ventanas distintas = ruido.
+
+Con muestras del mismo instante:
+```
+201 Mb · 29.095 pps · CPU 23%
+450 Mb · 60.565 pps · CPU 34%
+```
+Todo se duplicó junto, y el **tamaño promedio de paquete es ~900 bytes en ambas** — o sea que bytes y paquetes son proporcionales y no se pueden separar. **El CPU sigue a la carga, se la mida como se la mida.**
+
+**Regla general para este router**: nunca cruzar una lectura instantánea contra una promediada. Si hace falta correlacionar CPU con tráfico, tomar ambos del mismo script en la misma corrida.
+
+### Capacidad restante del RB4011 (2026-08-31)
+```
+450 Mb · 60k pps   →  34% de CPU  (repartido 25/19/19/22 en los 4 nucleos)
+900 Mb · 120k pps  →  ~65-70% estimado
+```
+**Queda aproximadamente una duplicación de margen.** Con el tráfico cuadruplicándose año a año, eso son entre uno y dos años. No es urgente, pero **el número a vigilar de acá en adelante es `pps` y `cpu`, no los megas.** Ya quedaron incorporados a `MoniGuti-conexiones` con récord propio en `:global mgPpsMax`/`mgPpsHora`.
+
+### ⚠️ El "22% del enlace" quedó desactualizado en el informe — CORREGIDO (2026-08-31)
+El expediente para Movistar afirmaba "usamos el 22% de lo contratado", calculado sobre el pico de 209 Mb. **Con ráfagas de 450 Mb sobre 940, el pico instantáneo es el 48%.**
+
+Se corrigió en las cuatro apariciones. Motivo práctico: **si el usuario dice 22% y el técnico de Movistar mira sus propios contadores y ve 450 Mb, pierde credibilidad todo el resto del expediente** — que es sólido y no depende de ese número.
+
+Redacción nueva: promedio de 5 minutos hasta 210 Mb, ráfagas hasta 450, **nunca más de la mitad del enlace**, y el argumento central sin tocar: **los peores episodios se midieron con el enlace al 9%**.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
