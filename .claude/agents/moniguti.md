@@ -496,6 +496,42 @@ Todo descartado con medición directa durante los episodios:
 
 **Lo que queda: congestión aguas arriba en la red de acceso de Movistar, en horario laboral, con cortes totales.** El reclamo ya no necesita hipótesis: tiene cortes documentados y ocho caídas del sistema de salud provincial.
 
+### 🎯 TRACEROUTE: la demora se inyecta en el SALTO 2 (2026-08-31) — la prueba definitiva
+```
+#  ADDRESS         LOSS   SENT  AVG    BEST  WORST   STD-DEV
+1  192.168.1.1      0%     20   3.2    0.2    17      4.3     ← ONU (borde del hospital)
+2  200.51.241.1     0%     20   38.4   2.3   289.5   64.5     ← PRIMER EQUIPO DE MOVISTAR
+3  213.140.39.119   0%     20   38.7   4.6   230.7   64.7
+4  213.140.39.118   0%     20   33.4   4.2   236.7   69.2
+5  94.142.97.59     0%     20   53.6  27.6   237.1   61.1
+6  190.98.132.211  68.4%   20   47.2  30.1    81.1   17.7     ← falsa alarma, ver abajo
+7  162.158.225.25   0%     19   65.4  31.2   189.9   54.1
+8  1.1.1.1          0%     19   51.1  30.0   175.4   34.2
+```
+
+**La desviación estándar salta 15 veces en un solo salto: 4,3 en la ONU → 64,5 en el primer router de Movistar.** Y de ahí en adelante se mantiene plana (64,7 · 69,2 · 61,1): **no se agrega variación nueva después del salto 2.** Toda la inestabilidad se inyecta en el tramo entre la ONU del hospital y el primer equipo de Movistar — es decir, **en la red de acceso GPON**.
+
+**Esto cierra la pregunta de la ONU con un número.** La ONU aporta 17 ms de peor caso y 4,3 de desviación; el salto siguiente aporta 289,5 y 64,5. **La ONU es responsable de alrededor del 6% de la variación.** Contribuye, no causa. Es coherente con lo que ya mostraban las correlaciones.
+
+⚠️ **El 68,4% de pérdida del salto 6 es una falsa alarma y hay que saber explicarlo**: los saltos 7 y 8, que están *más allá*, muestran 0% de pérdida. Si los paquetes no pasaran por el 6 no llegarían al 8. Ese router simplemente limita la tasa de sus **propias** respuestas ICMP — es comportamiento normal y deliberado. **No es pérdida real de tráfico.** Movistar puede intentar usarlo para desviar el foco, o el usuario puede alarmarse: tener la respuesta lista.
+
+**Dato accionable para el reclamo**: el primer equipo de Movistar fuera del hospital es **`200.51.241.1`**. Ahí es donde empieza el problema. Pedir que revisen ese tramo y el árbol GPON que lo alimenta, en la franja 08:00-11:00.
+
+### Ping de 20 paquetes durante la degradación (2026-08-31)
+```
+1.1.1.1:  30.6 34.9 166.6 131.3 30.6 30.3 29.6 30.1 29.2 30.8
+          91.4 30.8  31.0  30.9 75.5 95.6 29.9 30.0 31.1 30.7
+          min=29.2  avg=51.0  max=166.6  perdida=0%
+```
+**14 de 20 paquetes clavados entre 29,2 y 31,1 ms — el piso no se movió — y seis disparados hasta 166 ms, con cero pérdida.**
+
+Es la firma de **encolamiento**, y descarta tres cosas de un saque:
+- **Reruteo**: si el camino hubiera cambiado, subirían *todos* los paquetes, no seis.
+- **Enlace roto**: cero pérdida en 20 paquetes.
+- **Saturación propia**: con el enlace lleno el piso también sube; acá no se movió.
+
+Es la evidencia más legible para alguien no técnico: se ve la columna de treintas y los picos sueltos.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
