@@ -363,6 +363,42 @@ El usuario observó picos de **~60.000 conexiones**, muy por encima de los 15.86
 
 ⚠️ **Caveat obligatorio al citar el número**: `tcp-established-timeout=1d`, así que una parte importante de esas 60.000 son **conexiones muertas que siguen en la tabla**. El número de flujos realmente activos es menor. **No bajar ese timeout**: cortaría sesiones largas e inactivas de RDP, base de datos y PACS. Tener la respuesta lista por si Movistar lo objeta — el pico sigue muy por encima de cualquier tabla residencial incluso descontando las muertas.
 
+### 🚨 EL HSI SE CAE DURANTE LA DEGRADACION (2026-08-31) — el hallazgo de mayor peso
+El log de scripts cruzado con el de calidad, misma mañana:
+
+```
+08:52:12  ALERTA-HSI-shc.ms.gba.gov.ar-dejo-de-responder
+08:52:54  CALIDAD avg=334ms jitter=374ms perdida=20% baja=132Mb
+08:53:11  HSI-shc.ms.gba.gov.ar-recupero-conexion
+08:54:42  ALERTA-HSI-shc.ms.gba.gov.ar-dejo-de-responder
+08:55:11  HSI-shc.ms.gba.gov.ar-recupero-conexion
+08:59:12  ALERTA-HSI-shc.ms.gba.gov.ar-dejo-de-responder
+08:59:41  HSI-shc.ms.gba.gov.ar-recupero-conexion
+```
+
+**Tres caídas del HSI en siete minutos, exactamente durante el peor episodio de degradación.**
+
+El netwatch del HSI es `type=tcp-conn port=443`: **no falló un ping, falló el establecimiento de la conexión TCP**. Con 20% de pérdida los handshakes TLS no completan. Para el médico eso es la pantalla del sistema de historia clínica del Ministerio colgada o pidiendo login de nuevo.
+
+**Esto cambia la naturaleza del reclamo.** Deja de ser "el internet del hospital anda lento" y pasa a ser **"el sistema de historia clínica de la Provincia se vuelve inaccesible para los médicos durante la degradación diaria"**. Es impacto asistencial, no una molestia de sistemas. Es la frase que abre puertas en la llamada y la que justifica el escalamiento.
+
+### El registro de conexiones quedó andando (2026-08-31 09:00)
+`MoniGuti-conexiones` verificado: existe, con `dont-require-permissions=yes`, `run-count` avanzando, y ya escribió:
+```
+09:00:28  CONEX RECORD 17505 baja=160Mb cpu=23%
+```
+Valores observados por script: 17.505 a 17.721 conexiones, CPU 15-23%. **Todavía muy lejos de los ~60.000 que reportó el usuario** — hay que dejarlo correr para capturar ese pico y ver con qué coincide.
+
+### Inestabilidad de APs — problema separado del WAN (2026-08-30/31)
+El log de scripts muestra flapeo real, que no tiene nada que ver con Movistar:
+
+- **AP Laboratorio 2 (`192.168.10.241`)** y **AP Laboratorio 3 (`192.168.10.240`)**: varios ciclos DOWN/UP en minutos el 30/08 entre las 11:44 y las 12:10. Son los peores.
+- **AP Central 2, 3, 4 y 5** (`.224`, `.223`, `.222`, `.218`) volvieron **todos UP en el mismo segundo**, a las 06:03:10 del 31/08. **Cuatro APs del mismo sector recuperando simultáneamente no son cuatro fallas: es un elemento compartido** — el switch de ese sector, su uplink o la alimentación. Buscar ahí, no en los APs.
+- AP Central 5 volvió a caer a las 08:24:47 y recuperó a las 08:27:44.
+- AP Intendencia 2 (`.253`): ciclo corto a las 11:56.
+
+**No mezclar esto con el reclamo a Movistar.** Es infraestructura interna del hospital y se arregla acá.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
