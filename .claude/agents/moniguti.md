@@ -629,6 +629,31 @@ Se corrigió en las cuatro apariciones. Motivo práctico: **si el usuario dice 2
 
 Redacción nueva: promedio de 5 minutos hasta 210 Mb, ráfagas hasta 450, **nunca más de la mitad del enlace**, y el argumento central sin tocar: **los peores episodios se midieron con el enlace al 9%**.
 
+### Informe para el Ministerio de Salud — dimensionamiento de enlace (2026-09)
+El usuario convocó una reunión con superiores del Ministerio y le pidieron un documento propio: el Ministerio va a negociar con la **DPT** un enlace de **1 Gb para todos los hospitales**. Alcance pedido explícitamente: **solo los dos enlaces (Movistar y DPT) y cuál sería el enlace ideal**. Sin equipamiento interno ni configuraciones de seguridad pendientes.
+
+Publicado como artifact aparte del expediente de Movistar. Es otro género: no es un guion de reclamo, es un **estudio de dimensionamiento para una compra pública**.
+
+**Tesis del documento**: el pedido de 1 Gb está bien dimensionado, **pero si no se especifica la clase de servicio se replica el mismo problema a escala provincial**. El Gutiérrez es la prueba viviente — tiene 940 Mb, usa menos de la cuarta parte, y pierde el HSI ocho veces en 108 minutos.
+
+**El hallazgo de gobernanza que abre el informe** (y que el usuario todavía no había planteado en la reunión): **el HSI no viaja por la red provincial.** Está en IP pública, y la única `/routing rule` que alimenta la tabla `xDPT` manda por el DPT solo el tráfico hacia `10.0.0.0/8`. O sea que **el acceso de los médicos a la historia clínica depende íntegramente de un servicio residencial contratado hospital por hospital**. Para el Ministerio eso pesa más que cualquier número de caudal.
+
+**El cálculo de dimensionamiento:**
+```
+Pico sostenido medido (5 min)      209 Mb
+Crecimiento observado en 12 meses  ×3,5
+Proyección conservadora a 3 años   ×3     →  627 Mb
+Utilización máxima recomendada     60%
+                                   ─────────────────
+Caudal requerido                   627 / 0,60 = 1.045 Mb  →  1 Gb ✔
+```
+
+**Regla por establecimiento**: 209 Mb ÷ 800 usuarios = **0,26 Mb por usuario en pico**; con crecimiento y margen queda **1,3 Mb por usuario** a tres años. Tabla: hasta 200 usuarios → 300 Mb; 200-500 → 600 Mb; 500-1.000 → 1 Gb; 1.000-2.000 → 2 Gb; +2.000 → 3 Gb. **Piso de 300 Mb** aun en establecimientos chicos por imágenes e historia clínica.
+
+**La especificación** (los tres primeros parámetros son los que deciden, no el caudal): medio de acceso **dedicado no compartido**; **jitter ≤ 20 ms**; **pérdida ≤ 0,5%**; caudal según tabla; simetría; caudal garantizado ≥30%; latencia ≤40 ms al nodo; disponibilidad ≥99,5%; reparación ≤4 h con 24×7 en establecimientos con guardia; IP fija; equipo terminal en modo puente; informe de calidad mensual.
+
+⚠️ **Límite de integridad declarado en el propio informe**: **NO se midió la calidad del enlace DPT**, solo su capacidad contratada y el alcance de su ruteo. Toda la degradación documentada es del enlace comercial. El documento lo dice explícitamente para que nadie lea ahí una acusación contra la red provincial — y porque el interlocutor del Ministerio *es* la DPT.
+
 ### Scripts y schedulers armados (2026-08-17)
 Seis scripts (`export-config` preexistente, `hsi-alert-down`, `hsi-alert-up`, `MoniGuti-resumen-APs`, `MoniGuti-arranque`, `MoniGuti-salud`) y tres schedulers: `MoniGuti-check-APs` cada 5m, `MoniGuti-check-salud` cada 10m, `MoniGuti-boot` con `start-time=startup`.
 
